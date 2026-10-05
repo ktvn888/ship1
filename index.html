@@ -228,22 +228,24 @@ function viewWallet(){
  const w=S[wsel];
  return `<div class="grid"><div class="card" style="${wsel==='credit'?'outline:2px solid var(--ac)':''}" onclick="wsel='credit';render()"><div class="mu">Ví tín dụng</div><div class="big ${S.credit.bal<0?'neg':''}">${money(S.credit.bal)}</div></div>
  <div class="card" style="${wsel==='driver'?'outline:2px solid var(--ac)':''}" onclick="wsel='driver';render()"><div class="mu">Ví tài xế</div><div class="big">${money(S.driver.bal)}</div></div></div>
- <div class="row" style="margin-top:10px">${wsel==='credit'?'<button class="p f" onclick="walletForm(\'topup\')">Nạp tiền</button>':'<button class="p f" onclick="walletForm(\'out\')">Rút tiền</button>'}
- <button class="f" onclick="walletForm(\'set\')">Chỉnh số dư</button></div>
+ <div class="row wrap" style="margin-top:10px">${wsel==='credit'?'<button class="p f" onclick="walletForm(\'topup\')">Nạp tiền</button>':'<button class="p f" onclick="walletForm(\'bonus\')">Nhập thưởng</button><button class="f" onclick="walletForm(\'out\')">Rút tiền</button>'}
+ <button class="f" onclick="walletForm(\'xfer\')">Chuyển sang ví tín dụng</button><button class="f" onclick="walletForm(\'set\')">Chỉnh số dư</button></div>
  <h2>Lịch sử ${wsel==='credit'?'ví tín dụng':'ví tài xế'}</h2>`+
  (w.log.length?w.log.slice(0,200).map(l=>`<div class="card"><div class="row sp"><span>${esc(l.why)}</span><b class="${cls(l.amt)}">${l.amt>0?'+':''}${money(l.amt)}</b></div><div class="mu">${dt(l.ts)} · Số dư sau: ${money(l.bal)}</div></div>`).join(''):'<div class="card mu">Chưa có biến động.</div>')}
 function walletForm(k){
- const T={topup:'Nạp tiền vào ví tín dụng',out:'Rút tiền từ ví tài xế',set:'Chỉnh số dư thủ công'};
+ const T={topup:'Nạp tiền vào ví tín dụng',out:'Rút tiền từ ví tài xế',set:'Chỉnh số dư thủ công',xfer:'Chuyển từ ví tài xế sang ví tín dụng',bonus:'Nhập thưởng vào ví tài xế'};
  sheet(`<h2 style="margin-top:0">${T[k]}</h2><label>${k==='set'?'Số dư mới (có thể âm)':'Số tiền'}</label><input id="wA" type="number" inputmode="numeric" ${k==='set'?'':'min="0"'}>
  <label>Ghi chú</label><input id="wN"><div class="row" style="margin-top:14px"><button class="f" onclick="closeSheet()">Đóng</button><button class="p f" onclick="walletDo('${k}')">Xác nhận</button></div>`)}
 function walletDo(k){
  const v=parseFloat($('wA').value),n=$('wN').value.trim();if(isNaN(v))return alert('Hãy nhập số tiền.');
  if(k!=='set'&&v<=0)return alert('Số tiền phải lớn hơn 0.');
  if(k==='topup')adj('credit',v,'Nạp tiền'+(n?': '+n:''));
- const run=()=>{if(k==='out')adj('driver',-v,'Rút tiền'+(n?': '+n:''));
+ const run=()=>{if(k==='bonus')adj('driver',v,'Thưởng'+(n?': '+n:''));
+  if(k==='xfer'){adj('driver',-v,'Chuyển sang ví tín dụng'+(n?': '+n:''));adj('credit',v,'Nhận từ ví tài xế'+(n?': '+n:''))}
+  if(k==='out')adj('driver',-v,'Rút tiền'+(n?': '+n:''));
   if(k==='set')adj(wsel,v-S[wsel].bal,'Chỉnh số dư'+(n?': '+n:''));
   save();closeSheet();render()};
- if(k==='out'&&v>S.driver.bal)ask('Số tiền rút lớn hơn số dư ví tài xế. Vẫn tiếp tục?',run);else run()}
+ if((k==='out'||k==='xfer')&&v>S.driver.bal)ask('Số tiền lớn hơn số dư ví tài xế. Vẫn tiếp tục?',run);else run()}
 
 /* ================= THỐNG KÊ ================= */
 function rangeDates(){

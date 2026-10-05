@@ -88,12 +88,13 @@ function adj(w,amt,why){if(!amt)return;S[w].bal+=amt;S[w].log.unshift({ts:Date.n
 function fx(t){
  if(t.status!=='done'||t.type==='ngoai')return{c:0,d:0};
  const fee=t.due-t.net, cashLike=t.pay!=='card';
- return cashLike?{c:S.set.cashFee?-fee:0,d:S.set.cashNet?t.net:0}:{c:0,d:t.net};
+ const r=cashLike?{c:S.set.cashFee?-fee:0,d:S.set.cashNet?t.net:0}:{c:0,d:t.net};
+ r.d+=t.bonus||0;return r; // thưởng cuốc luôn cộng vào ví tài xế
 }
 const tname=t=>TYPES[t.type]+' #'+t.no;
 /* Hoàn tác phần đã áp lên ví, rồi áp lại theo dữ liệu mới */
 function revert(t,why){if(t.applied){adj('credit',-t.applied.c,why+' '+tname(t));adj('driver',-t.applied.d,why+' '+tname(t));t.applied=null}}
-function applyTrip(t){const f=fx(t);adj('credit',f.c,'Phí '+tname(t));adj('driver',f.d,'Tiền ròng '+tname(t));t.applied=f}
+function applyTrip(t){const f=fx(t);adj('credit',f.c,'Phí '+tname(t));adj('driver',f.d-(t.bonus||0),'Tiền ròng '+tname(t));adj('driver',t.bonus||0,'Thưởng '+tname(t));t.applied=f}
 /* Kiểm tra ví tín dụng có đủ không trước khi áp */
 function creditOk(t,old,go){const after=S.credit.bal-(old&&old.applied?old.applied.c:0)+fx(t).c;
  if(after>=0)go();else ask('Ví tín dụng không đủ (còn '+money(S.credit.bal)+', sau cuốc này '+money(after)+'). Vẫn tiếp tục?',go)}
@@ -110,7 +111,8 @@ function tripForm(id){
  sheet(`<h2 style="margin-top:0">${old?'Sửa cuốc':'Thêm cuốc'}</h2>
  <label>Loại cuốc</label>${seg('type',TYPES)}
  <div id="fApp"><label>Tiền phải thu của khách</label><input id="fDue" type="number" inputmode="numeric" min="0" value="${f.due||''}">
- <label>Tiền ròng thực nhận</label><input id="fNet" type="number" inputmode="numeric" min="0" value="${f.net||''}"></div>
+ <label>Tiền ròng thực nhận</label><input id="fNet" type="number" inputmode="numeric" min="0" value="${f.net||''}">
+ <label>Tiền thưởng cuốc (nếu có)</label><input id="fBonus" type="number" inputmode="numeric" min="0" value="${f.bonus||''}"></div>
  <div id="fOut"><label>Số tiền khách trả</label><input id="fAmt" type="number" inputmode="numeric" min="0" value="${f.type==='ngoai'?f.due||'':''}"></div>
  <label>Hình thức thanh toán</label><div id="fPay"></div>
  <div id="fCash"><label>Khách đưa</label><input id="fGiven" type="number" inputmode="numeric" min="0" value="${f.given||''}">
@@ -121,7 +123,7 @@ function tripForm(id){
  <div class="row" style="margin-top:14px"><button class="f" onclick="closeSheet()">Đóng</button><button class="p f" onclick="saveTrip(${id||0})">Lưu</button></div>`);
  document.querySelectorAll('.seg[data-k]').forEach(g=>g.onclick=e=>{const b=e.target.closest('button');if(!b)return;
   f[g.dataset.k]=b.dataset.v;g.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));fview()});
- ['fDue','fNet','fAmt','fGiven'].forEach(i=>$(i).oninput=()=>{if(i==='fNet')f.touched=true;fview(i)});
+ ['fDue','fNet','fBonus','fAmt','fGiven'].forEach(i=>$(i).oninput=()=>{if(i==='fNet')f.touched=true;fview(i)});
  $('fChips').innerHTML=[20000,50000,100000,200000,500000].map(v=>`<button type="button" class="s" onclick="$('fGiven').value=${v};fview()">${v/1000}k</button>`).join('')+
   '<button type="button" class="s" onclick="$(\'fGiven\').value=f.due;fview()">Đủ tiền</button>';
  fview();
@@ -137,7 +139,7 @@ function fview(src){
  $('fPay').onclick=e=>{const b=e.target.closest('button');if(b){f.pay=b.dataset.v;fview()}};
  $('fCash').style.display=(!ng&&f.pay==='cash')?'':'none';
  const due=ng?num($('fAmt').value):num($('fDue').value), net=ng?due:num($('fNet').value), g=num($('fGiven').value);
- f.dueV=due;f.netV=net;f.givenV=g;
+ f.dueV=due;f.netV=net;f.givenV=g;f.bonusV=ng?0:num($('fBonus').value);
  let h='';
  if(!ng){const fee=due-net;
   h+=f.type==='bike'?`Grab lấy: <b>${money(fee)}</b> (${due?(fee/due*100).toFixed(1):0}%)<br>Bạn nhận: <b>${money(net)}</b> (${due?(net/due*100).toFixed(1):0}%)`:`Chênh lệch: <b>${money(fee)}</b>`;
@@ -145,6 +147,7 @@ function fview(src){
   if(f.pay==='card')h+='<br><span class="mu">Khách đã trả trong app, không thu tiền mặt.</span>';
   if(f.pay==='bank')h+='<br><span class="mu">Khách chuyển khoản, không có tiền mặt vào két.</span>';
  }else h='Thực nhận: <b>'+money(due)+'</b>';
+ if(f.bonusV)h+='<br>Thưởng: <b>+'+money(f.bonusV)+'</b> vào ví tài xế';
  $('fPrev').innerHTML=h;
 }
 function saveTrip(id){
@@ -154,7 +157,7 @@ function saveTrip(id){
  if(!ng&&f.pay==='cash'&&g&&g<due)return alert('Khách đưa chưa đủ tiền phải thu.');
  const old=S.trips.find(t=>t.id===id);
  const t={id:old?old.id:Date.now(),no:old?old.no:++S.seq,type:f.type,pay:f.pay,status:f.status,due,net,given:(!ng&&f.pay==='cash')?g:0,
-  note:$('fNote').value.trim(),ts:old?old.ts:Date.now(),applied:old?old.applied:null};
+  bonus:ng?0:f.bonusV,note:$('fNote').value.trim(),ts:old?old.ts:Date.now(),applied:old?old.applied:null};
  creditOk(t,old,()=>{revert(t,'Hoàn tác');applyTrip(t);
   const i=S.trips.findIndex(x=>x.id===t.id);if(i>=0)S.trips[i]=t;else S.trips.push(t);
   save();closeSheet();render();toast('Đã lưu cuốc')})}
@@ -176,6 +179,7 @@ function tripCard(t,btn=true){
  let info=t.type==='ngoai'?`Nhận <b>${money(t.due)}</b>`:`Thu ${money(t.due)} → ròng <b>${money(t.net)}</b><br>`+
   (t.type==='bike'?`Grab lấy ${money(fee)} (${t.due?(fee/t.due*100).toFixed(1):0}%) · Bạn nhận ${t.due?(t.net/t.due*100).toFixed(1):0}%`:`Chênh lệch ${money(fee)}`)+
   (t.pay==='cash'&&t.given?` · Trả lại ${money(t.given-t.due)}`:'');
+ if(t.bonus)info+=`<br>Thưởng <b>+${money(t.bonus)}</b>`;
  return `<div class="card trip ${t.status}"><div class="row sp"><b>${TYPES[t.type]} · ${PAYS[t.pay]}</b><span class="mu">${dt(t.ts)}</span></div>
  <div style="margin:6px 0">${info}</div>${t.note?`<div class="mu">${esc(t.note)}</div>`:''}
  ${btn?`<div class="row wrap" style="margin-top:8px">${Object.entries(STAT).map(([k,l])=>`<button class="s ${t.status===k?'p':''}" onclick="setStatus(${t.id},'${k}')">${l}</button>`).join('')}
@@ -187,7 +191,7 @@ function shiftCalc(sh){
  const tr=S.trips.filter(t=>inR(t)&&t.status==='done'),ex=S.exps.filter(inR);
  let ci=0,co=0;tr.forEach(t=>{const c=cashOf(t);ci+=c.in;co+=c.out});
  const ce=ex.filter(e=>e.cash).reduce((a,e)=>a+e.amt,0),all=ex.reduce((a,e)=>a+e.amt,0);
- const net=tr.reduce((a,t)=>a+t.net,0);
+ const net=tr.reduce((a,t)=>a+t.net+(t.bonus||0),0);
  return{n:tr.length,net,ci,co,ce,all,exp:sh.open+ci-co-ce,profit:net-all}}
 function startShift(){sheet(`<h2 style="margin-top:0">Bắt đầu ca</h2><label>Tiền mặt đầu ca</label><input id="sOpen" type="number" inputmode="numeric" min="0">
  <div class="row" style="margin-top:14px"><button class="f" onclick="closeSheet()">Đóng</button><button class="p f" onclick="S.shift={start:Date.now(),open:num($('sOpen').value)};save();closeSheet();render()">Bắt đầu</button></div>`)}
@@ -202,7 +206,7 @@ function doEnd(exp){const a=$('sAct').value;if(a==='')return alert('Hãy nhập 
 /* ================= TRANG CHỦ ================= */
 function viewHome(){
  const today=dkey(Date.now()),tr=S.trips.filter(t=>dkey(t.ts)===today),done=tr.filter(t=>t.status==='done');
- const net=done.reduce((a,t)=>a+t.net,0),ex=S.exps.filter(e=>dkey(e.ts)===today),exT=ex.reduce((a,e)=>a+e.amt,0),g=S.set.goal||0;
+ const net=done.reduce((a,t)=>a+t.net+(t.bonus||0),0),ex=S.exps.filter(e=>dkey(e.ts)===today),exT=ex.reduce((a,e)=>a+e.amt,0),g=S.set.goal||0;
  let h=`<div class="grid"><div class="card"><div class="mu">Ví tín dụng</div><div class="big ${S.credit.bal<0?'neg':''}">${money(S.credit.bal)}</div></div>
  <div class="card"><div class="mu">Ví tài xế</div><div class="big">${money(S.driver.bal)}</div></div></div>
  <div class="card" style="margin-top:10px"><div class="row sp"><span>Mục tiêu hôm nay</span><b>${money(net)} / ${money(g)}</b></div>
@@ -260,11 +264,11 @@ function viewStats(){
  const tr=S.trips.filter(t=>inR(t)&&(!F.type||t.type===F.type)&&(!F.pay||t.pay===F.pay)),done=tr.filter(t=>t.status==='done');
  window.__flt=tr.map(t=>t.id);
  const ex=S.exps.filter(inR).reduce((a,e)=>a+e.amt,0),sum=(a,f)=>a.reduce((s,t)=>s+f(t),0);
- const rev=sum(done,t=>t.due),net=sum(done,t=>t.net),fee=sum(done.filter(t=>t.type!=='ngoai'),t=>t.due-t.net);
+ const rev=sum(done,t=>t.due),bon=sum(done,t=>t.bonus||0),net=sum(done,t=>t.net)+bon,fee=sum(done.filter(t=>t.type!=='ngoai'),t=>t.due-t.net);
  const bk=done.filter(t=>t.type==='bike'),bp=sum(bk,t=>t.due)?sum(bk,t=>t.due-t.net)/sum(bk,t=>t.due)*100:0;
  const cnt=Object.keys(TYPES).map(k=>TYPES[k]+': '+done.filter(t=>t.type===k).length).join(' · ');
  // Biểu đồ cột theo ngày (tối đa 31 ngày gần nhất trong khoảng)
- const days={};done.forEach(t=>{const k=dkey(t.ts);days[k]=(days[k]||0)+t.net});
+ const days={};done.forEach(t=>{const k=dkey(t.ts);days[k]=(days[k]||0)+t.net+(t.bonus||0)});
  let ks=[];if(from!=='0000'&&to!=='9999'){for(let d=new Date(to+'T00:00');dkey(d)>=from&&ks.length<31;d.setDate(d.getDate()-1))ks.unshift(dkey(d))}else ks=Object.keys(days).sort().slice(-31);
  const mx=Math.max(1,...ks.map(k=>days[k]||0));
  const opt=(o,v)=>Object.entries(o).map(([k,l])=>`<option value="${k}" ${v===k?'selected':''}>${l}</option>`).join('');
@@ -275,7 +279,7 @@ function viewStats(){
  <div style="flex:1"><label>Thanh toán</label><select onchange="F.pay=this.value;render()"><option value="">Tất cả</option>${opt(PAYS,F.pay)}</select></div></div></div>
  <div class="grid"><div class="card"><div class="mu">Doanh thu</div><b class="big" style="font-size:20px">${money(rev)}</b></div><div class="card"><div class="mu">Tổng phí</div><b class="big" style="font-size:20px">${money(fee)}</b></div>
  <div class="card"><div class="mu">Thực nhận</div><b class="big" style="font-size:20px">${money(net)}</b></div><div class="card"><div class="mu">Lợi nhuận sau chi phí</div><b class="big ${cls(net-ex)}" style="font-size:20px">${money(net-ex)}</b></div></div>
- <div class="card" style="margin-top:10px">Chi phí: <b>${money(ex)}</b><br>Số cuốc hoàn thành: <b>${done.length}</b><br><span class="mu">${cnt}</span><br>Thu nhập TB/cuốc: <b>${money(done.length?net/done.length:0)}</b><br>% Grab lấy TB (Bike): <b>${bp.toFixed(1)}%</b> · % bạn nhận TB: <b>${bk.length?(100-bp).toFixed(1):0}%</b></div>
+ <div class="card" style="margin-top:10px">Tiền thưởng cuốc (đã tính trong thực nhận): <b>${money(bon)}</b><br>Chi phí: <b>${money(ex)}</b><br>Số cuốc hoàn thành: <b>${done.length}</b><br><span class="mu">${cnt}</span><br>Thu nhập TB/cuốc: <b>${money(done.length?net/done.length:0)}</b><br>% Grab lấy TB (Bike): <b>${bp.toFixed(1)}%</b> · % bạn nhận TB: <b>${bk.length?(100-bp).toFixed(1):0}%</b></div>
  <h2>Thu nhập theo ngày</h2><div class="card"><div class="chart">${ks.map(k=>`<div title="${k}: ${money(days[k]||0)}" style="height:${Math.max(2,(days[k]||0)/mx*100)}%"></div>`).join('')}</div>
  <div class="cl">${ks.map(k=>`<span>${k.slice(8)}</span>`).join('')}</div><div class="mu">Cao nhất: ${money(mx>1?mx:0)}</div></div>
  <div class="row sp"><h2>Danh sách cuốc (${tr.length})</h2>${tr.length?'<button class="s d" onclick="delFiltered()">Xoá danh sách này</button>':''}</div>`+(tr.length?tr.slice().reverse().map(t=>tripCard(t)).join(''):'<div class="card mu">Không có cuốc phù hợp bộ lọc.</div>')+

@@ -28,6 +28,9 @@ input,select{font:inherit;width:100%;min-height:50px;border-radius:12px;border:1
 label{display:block;font-size:13px;color:var(--mu);margin:10px 2px 4px}
 .seg{display:flex;gap:6px;flex-wrap:wrap}.seg button{flex:1 1 40%;background:var(--bg);color:var(--tx);border:1px solid var(--ln)}
 .seg button.on{background:var(--ac);color:#fff;border-color:var(--ac)}[data-theme=dark] .seg button.on{color:#06140d}
+.row>div{min-width:0}
+input[type=date]{min-width:0;max-width:100%;padding:0 8px;font-size:15px;-webkit-appearance:none;appearance:none;text-align:left}
+.seg.t3 button{flex:1 1 0;min-width:0;padding:0 6px}
 .chips{display:flex;gap:6px;overflow-x:auto;margin-top:6px}.chips button{min-height:36px;font-size:13px;white-space:nowrap}
 nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--ln);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
 nav button{flex:1;border-radius:0;background:none;color:var(--mu);min-height:62px;font-size:12px}nav button.on{color:var(--ac)}
@@ -263,7 +266,7 @@ function viewStats(){
  let ks=[];if(from!=='0000'&&to!=='9999'){for(let d=new Date(to+'T00:00');dkey(d)>=from&&ks.length<31;d.setDate(d.getDate()-1))ks.unshift(dkey(d))}else ks=Object.keys(days).sort().slice(-31);
  const mx=Math.max(1,...ks.map(k=>days[k]||0));
  const opt=(o,v)=>Object.entries(o).map(([k,l])=>`<option value="${k}" ${v===k?'selected':''}>${l}</option>`).join('');
- return `<div class="seg" style="margin-bottom:8px">${[['day','Ngày'],['week','Tuần'],['month','Tháng']].map(([k,l])=>`<button class="${!F.from&&!F.to&&F.range===k?'on':''}" onclick="F.range='${k}';F.from=F.to='';render()">${l}</button>`).join('')}</div>
+ return `<div class="seg t3" style="margin-bottom:8px">${[['day','Ngày'],['week','Tuần'],['month','Tháng']].map(([k,l])=>`<button class="${!F.from&&!F.to&&F.range===k?'on':''}" onclick="F.range='${k}';F.from=F.to='';render()">${l}</button>`).join('')}</div>
  <div class="card"><div class="row"><div style="flex:1"><label style="margin-top:0">Từ ngày</label><input type="date" value="${F.from}" onchange="F.from=this.value;render()"></div>
  <div style="flex:1"><label style="margin-top:0">Đến ngày</label><input type="date" value="${F.to}" onchange="F.to=this.value;render()"></div></div>
  <div class="row"><div style="flex:1"><label>Loại cuốc</label><select onchange="F.type=this.value;render()"><option value="">Tất cả</option>${opt(TYPES,F.type)}</select></div>
